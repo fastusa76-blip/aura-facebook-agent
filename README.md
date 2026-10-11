@@ -1,53 +1,48 @@
-# AURA Facebook Agent
+# AURA Windows Voice AI
 
-A local-first Facebook Page assistant designed to integrate with AURA Windows Assistant.
+A local-first starter for a professional Windows desktop assistant controlled by voice or text. This repository is no longer a Facebook publishing agent.
 
-## Goals
-- Draft Facebook Page posts and require explicit approval before publishing.
-- Publish through Meta Graph API using a Page access token supplied by the owner.
-- Keep an auditable record of actions.
-- Add scheduling, comment/inbox workflows, and Urdu tutorial-video creation in later phases.
-- Prefer free and local tools; no paid AI API is required for the initial MVP.
+## Current MVP
+- Browser dashboard with microphone button, transcript, spoken responses, and system overview.
+- Basic read-only system diagnostics.
+- Explicit allowlist for launching Chrome, Notepad, Calculator, and File Explorer.
+- Local JSONL audit log in `data/audit.jsonl`.
+- Server binds to `127.0.0.1` by default.
+- No arbitrary PowerShell, CMD, or shell execution from voice input.
 
-## Current status
-**Phase 1 scaffold / MVP foundation.** The implementation has draft, approval, audit, health, and approval-gated publish endpoints. Drafts and audit events are currently stored in memory, so they reset when the process restarts. This is not production-ready until persistent storage, OAuth/token lifecycle, authenticated AURA access, rate limiting, and automated tests are completed.
+## Requirements
+- Windows 10/11
+- Node.js 20 or later and npm
+- A supported browser for Web Speech API microphone input (support and language accuracy vary by browser/provider)
 
-## Setup
-Requirements: Node.js 20+, npm, Meta Developer app and approved Page permissions for real publishing.
+## Run locally
+```powershell
+npm install
+npm run typecheck
+npm test
+npm run dev
+```
+Open http://127.0.0.1:4317. If the microphone is unavailable, use the text command field.
 
-1. Copy .env.example to .env.
-2. Set a long random AURA_AGENT_SECRET and keep .env out of Git.
-3. Set META_GRAPH_API_VERSION to a currently supported version from Meta's official docs.
-4. Only when ready to test real publishing, set META_PAGE_ID and META_PAGE_ACCESS_TOKEN locally.
-5. Run: npm install, npm run typecheck, npm test, npm run dev.
+## Supported starter commands
+- `Open Chrome`
+- `Open Notepad`
+- `Open Calculator`
+- `Open File Explorer`
+- `System status`
+- Urdu diagnostics aliases: `کمپیوٹر کی حالت`, `سسٹم کی حالت`
 
-The service binds to 127.0.0.1 by default. API requests require an Authorization Bearer token matching AURA_AGENT_SECRET.
+The first version deliberately uses a fixed allowlist. It does not yet include a cloud/local LLM, wake-word detection, unrestricted file operations, or general-purpose automation. Browser speech recognition may send audio to the browser vendor's recognition service; check your browser's privacy settings.
 
-## API
-- GET /health
-- POST /api/facebook/posts/draft
-- GET /api/facebook/posts
-- POST /api/facebook/posts/:id/approve
-- POST /api/facebook/posts/:id/publish
-- GET /api/facebook/audit
-
-Draft request JSON: { "caption": "السلام علیکم! یہ ایک ٹیسٹ پوسٹ ہے۔" }. Approval requires the contentHash returned by the draft endpoint. Publishing is disabled unless the Page ID, Page access token, and Graph API version are configured.
-
-## Free-first design
-Drafting, approval, scheduling logic, local video rendering, and audit logic can run without paid AI APIs. Meta permissions, app review, platform limits, and policy requirements still apply. Local video rendering can use FFmpeg; Urdu TTS depends on availability of a suitable local voice. No tool can guarantee 1,000,000 views; reach depends on audience response and platform distribution.
-
-## Security notes
-- Never store Facebook passwords or commit tokens.
-- Use OAuth and least-privilege permissions for production.
-- Keep secrets in local environment variables or a secure OS credential store.
-- Approval is bound to a content hash; editing the draft invalidates approval.
-- Current in-memory storage is a development scaffold, not durable production storage.
+## Safety model
+Natural-language input is treated as untrusted. The server maps only exact supported patterns to predefined actions and launches allowlisted applications without a shell. Unknown commands are rejected. Never add an endpoint that runs arbitrary user-supplied shell strings. Before adding file deletion, registry edits, network resets, or process termination, implement dry-run previews, explicit confirmation, capability checks, and audit records.
 
 ## Roadmap
-1. MVP API, approval gates, and audit events.
-2. Persistent SQLite storage, schema migrations, and tests.
-3. Meta OAuth/page discovery and secure token handling.
-4. Scheduler with idempotency and reconciliation.
-5. Comment and Messenger workflows within Meta permissions/policies.
-6. Urdu script, subtitles, local TTS, FFmpeg rendering, and preview.
-7. AURA HUD integration, CI checks, and end-to-end verification.
+1. Starter dashboard, voice/text commands, basic diagnostics, allowlisted app launching.
+2. Local speech recognition option and Urdu/Roman Urdu intent normalization.
+3. Typed action plans, risk labels, dry-run previews, explicit approval, and verification.
+4. Secure local memory, settings, tests, and persistent audit review.
+5. Optional LLM provider behind a policy engine; AI proposes plans but never executes shell commands directly.
+6. Windows packaging and installer after integration tests pass.
+
+This is an early development scaffold, not a production-ready autonomous agent.
