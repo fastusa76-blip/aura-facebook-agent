@@ -34,7 +34,7 @@ Open http://127.0.0.1:4317. If the microphone is unavailable, use the text comma
 ## Important limitations
 A song command opens YouTube search results. AURA does not automatically choose a video or guarantee playback because results can be ambiguous and browser autoplay policies vary. Click the correct result to start the song.
 
-This version intentionally does not execute arbitrary spoken PowerShell, CMD, or shell commands. Unknown commands are rejected rather than guessed. File deletion, registry edits, process termination, network resets, purchases, and other consequential actions need separate previews, explicit approval, and audit logging before implementation. Browser speech recognition may send audio to the browser provider; review your browser privacy settings.
+This version intentionally does not execute arbitrary spoken shell commands. Unknown commands are rejected rather than guessed. File deletion, registry edits, process termination, network resets, purchases, and other consequential actions need separate previews, explicit approval, and audit logging before implementation. Browser speech recognition may send audio to the browser provider; review your browser privacy settings.
 
 ## Safety model
 Natural-language input is untrusted. The server maps supported phrases to predefined actions and launches programs with shell execution disabled where possible. Website navigation is restricted to AURA-generated YouTube URLs; song names are URL-encoded and never interpreted as commands.
