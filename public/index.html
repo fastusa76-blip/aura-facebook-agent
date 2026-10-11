@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1220">
+  <title>AURA • Facebook Agent</title>
+  <style>
+    :root{color-scheme:dark;--bg:#080d18;--panel:#111a2a;--panel2:#0d1524;--line:#25334a;--text:#eef4ff;--muted:#a2b0c7;--cyan:#5de1d0;--blue:#8aa8ff;--amber:#ffce7a;--red:#ff9696;--green:#8be0a5}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 10% 0%,#14233b 0,transparent 42%),var(--bg);color:var(--text);font:15px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+    button,input,textarea{font:inherit}button{cursor:pointer;border:1px solid #344762;background:#1a2940;color:var(--text);padding:10px 14px;border-radius:11px;font-weight:650;transition:transform .15s,border-color .15s}button:hover{border-color:var(--cyan);transform:translateY(-1px)}button:disabled{opacity:.4;cursor:not-allowed;transform:none}.primary{background:linear-gradient(135deg,#5de1d0,#8aa8ff);border:0;color:#07111d}.danger{border-color:#75424a;background:#321e2b}.small{padding:6px 10px;font-size:13px}
+    .wrap{max-width:1180px;margin:auto;padding:26px 20px 48px}.top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:26px}.brand{display:flex;align-items:center;gap:13px}.mark{display:grid;place-items:center;width:48px;height:48px;border-radius:15px;background:linear-gradient(135deg,#5de1d0,#8aa8ff);color:#091220;font-weight:950;font-size:20px;box-shadow:0 8px 32px #5de1d022}.eyebrow{font-size:11px;letter-spacing:.18em;color:var(--cyan);font-weight:800;text-transform:uppercase}.brand h1{font-size:23px;margin:1px 0 0;letter-spacing:-.04em}.top-right{display:flex;gap:9px;align-items:center}.pill{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:12px}.dot{width:7px;height:7px;border-radius:50%;background:var(--amber)}.dot.ok{background:var(--green);box-shadow:0 0 12px #8be0a555}
+    .hero{display:grid;grid-template-columns:1.3fr .7fr;gap:18px;margin-bottom:18px}.hero-main,.hero-side,.panel,.stat{border:1px solid var(--line);background:linear-gradient(160deg,#121d30f2,#0e1625f2);border-radius:20px}.hero-main{padding:26px}.hero h2{font-size:clamp(25px,3vw,38px);line-height:1.12;letter-spacing:-.04em;margin:9px 0 12px}.hero p{color:var(--muted);max-width:640px;margin:0}.hero-side{padding:22px;display:flex;flex-direction:column;justify-content:center;gap:12px}.secure{display:flex;gap:12px;align-items:flex-start}.secure-icon{flex:none;width:36px;height:36px;display:grid;place-items:center;border-radius:12px;background:#193b3b;color:var(--cyan);font-size:18px}.secure strong{display:block;margin-bottom:2px}.secure span{display:block;color:var(--muted);font-size:13px}
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:18px 0}.stat{padding:16px 18px}.stat span{display:block;color:var(--muted);font-size:12px}.stat strong{display:block;font-size:26px;margin-top:4px;letter-spacing:-.03em}.columns{display:grid;grid-template-columns:minmax(300px,.85fr) minmax(0,1.15fr);gap:18px;align-items:start}.panel{padding:22px;min-width:0}.panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:18px}.panel h3{margin:0;font-size:18px;letter-spacing:-.02em}.sub{color:var(--muted);font-size:13px;margin:5px 0 0}.field{margin:15px 0}.field label{display:block;font-size:13px;color:#c9d5e8;margin-bottom:7px}.field input,.field textarea{width:100%;border:1px solid #2c3b53;background:#09111f;color:var(--text);border-radius:11px;padding:12px;outline:none}.field input:focus,.field textarea:focus{border-color:var(--cyan);box-shadow:0 0 0 3px #5de1d018}.field textarea{resize:vertical;min-height:155px}.hint{color:var(--muted);font-size:12px;margin-top:7px}.row{display:flex;gap:9px;flex-wrap:wrap}.row>*{flex:1}.notice{padding:12px 14px;border-radius:12px;background:#202b3e;color:#d3def1;font-size:13px;border:1px solid #31415a}.notice.warn{background:#30291d;border-color:#5e4c2b;color:#ffdf9e}.notice.error{background:#321f29;border-color:#6b3545;color:#ffb3bc}.notice.success{background:#152d29;border-color:#28584d;color:#a8f2ce}
+    .post-list{display:grid;gap:12px}.post{border:1px solid var(--line);background:#0b1321;border-radius:15px;padding:15px}.post-top{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px}.status{font-size:11px;letter-spacing:.03em;text-transform:uppercase;border-radius:999px;padding:5px 8px;border:1px solid #4a4a42;color:var(--amber);white-space:nowrap}.status.approved,.status.published{border-color:#2c6456;color:var(--green)}.status.failed{border-color:#70404a;color:var(--red)}.caption{white-space:pre-wrap;overflow-wrap:anywhere;margin:0 0 10px}.post-link{color:var(--blue);font-size:12px;overflow-wrap:anywhere}.meta{display:flex;flex-wrap:wrap;gap:10px;color:var(--muted);font-size:11px;margin-top:10px}.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px}.empty{padding:28px 12px;text-align:center;color:var(--muted);border:1px dashed #31415a;border-radius:14px}.audit-list{display:grid;gap:8px}.audit-item{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #202d40;padding:10px 0;font-size:12px}.audit-item span{color:var(--muted)}footer{padding:24px 4px 0;text-align:center;color:#74839c;font-size:12px}
+    @media(max-width:850px){.hero,.columns{grid-template-columns:1fr}.hero-side{display:grid;grid-template-columns:1fr 1fr}.top{align-items:flex-start;flex-direction:column}.stats{gap:8px}.stat{padding:13px}.stat strong{font-size:22px}}
+    @media(max-width:520px){.wrap{padding:17px 12px 30px}.hero-main,.hero-side,.panel{padding:17px}.hero-side{grid-template-columns:1fr}.stats{grid-template-columns:1fr}.top-right{flex-wrap:wrap}.brand h1{font-size:20px}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header class="top">
+      <div class="brand"><div class="mark">A</div><div><div class="eyebrow">Autonomous Windows Assistant</div><h1>AURA Facebook Agent</h1></div></div>
+      <div class="top-right"><span class="pill"><i class="dot" id="healthDot"></i><span id="healthText">Checking local API…</span></span><button class="small" id="refreshBtn">Refresh data</button></div>
+    </header>
+    <section class="hero">
+      <div class="hero-main"><div class="eyebrow">Local control center</div><h2>Your content.<br> Your approval. Your control.</h2><p>Create Facebook Page post drafts, review their status, and inspect the local audit trail. Publishing remains a separate, explicit action after approval.</p></div>
+      <div class="hero-side">
+        <div class="secure"><div class="secure-icon">⌁</div><div><strong>Approval-gated workflow</strong><span>Drafts must be approved before the publish action is enabled.</span></div></div>
+        <div class="secure"><div class="secure-icon">◈</div><div><strong>Local-first privacy</strong><span>Your agent secret is kept in this page's memory only, not saved in browser storage.</span></div></div>
+      </div>
+    </section>
+    <section class="stats" aria-label="Post totals">
+      <div class="stat"><span>Total drafts</span><strong id="totalCount">—</strong></div><div class="stat"><span>Awaiting approval</span><strong id="pendingCount">—</strong></div><div class="stat"><span>Published</span><strong id="publishedCount">—</strong></div>
+    </section>
+    <div id="globalNotice" class="notice" role="status">This dashboard talks only to your local AURA API.</div>
+    <section class="columns" style="margin-top:18px">
+      <div>
+        <section class="panel">
+          <div class="panel-head"><div><h3>Connect local agent</h3><p class="sub">Use the AURA_AGENT_SECRET from your local .env file.</p></div></div>
+          <div class="field"><label for="secret">Agent secret</label><input id="secret" type="password" autocomplete="off" placeholder="Paste your local secret here" spellcheck="false"></div>
+          <div class="row"><button id="connectBtn" class="primary">Connect securely</button><button id="disconnectBtn">Clear secret</button></div>
+          <p class="hint">Never paste this secret into chat or commit it to GitHub. It stays in page memory and is cleared when you reload.</p>
+          <div class="field"><label for="caption">Post caption</label><textarea id="caption" maxlength="5000" placeholder="اپنی Facebook Page پوسٹ یہاں لکھیں…"></textarea><div class="hint"><span id="charCount">0</span>/5000 characters</div></div>
+          <div class="field"><label for="link">Optional link</label><input id="link" type="url" placeholder="https://example.com"></div>
+          <button id="createBtn" class="primary" style="width:100%" disabled>Create draft for review</button>
+          <p class="hint">Creating a draft does not publish it. You must approve it, then explicitly choose Publish.</p>
+        </section>
+        <section class="panel" style="margin-top:18px">
+          <div class="panel-head"><div><h3>Recent activity</h3><p class="sub">Latest local audit events</p></div><button id="auditBtn" class="small">Reload</button></div>
+          <div id="auditList" class="audit-list"><div class="empty">Connect to load audit activity.</div></div>
+        </section>
+      </div>
+      <section class="panel">
+        <div class="panel-head"><div><h3>Post manager</h3><p class="sub">Review drafts and approve the exact content hash before publishing.</p></div><button id="postsBtn" class="small">Reload</button></div>
+        <div id="postList" class="post-list"><div class="empty">Connect to load your drafts.</div></div>
+      </section>
+    </section>
+    <footer>AURA • Local development dashboard • Publishing requires valid Meta Page API configuration and permissions.</footer>
+  </main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  let agentSecret = "";
+  let posts = [];
+  const statusLabel = {pending_approval:"Awaiting approval", approved:"Approved", published:"Published", failed:"Failed"};
+  function notice(message, type="") {
+    const el = $("globalNotice"); el.className = "notice" + (type ? " " + type : ""); el.textContent = message;
+  }
+  async function api(path, options={}) {
+    const response = await fetch(path, { ...options, headers: { "Content-Type":"application/json", ...(agentSecret ? {"Authorization":"Bearer " + agentSecret} : {}), ...(options.headers || {}) } });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || ("Request failed: " + response.status));
+    return data;
+  }
+  async function health() {
+    try {
+      const data = await api("/health", {headers:{}, method:"GET"});
+      $("healthDot").classList.add("ok"); $("healthText").textContent = data.status === "ok" ? "Local API online" : "API response received";
+    } catch {
+      $("healthDot").classList.remove("ok"); $("healthText").textContent = "API offline";
+    }
+  }
+  function renderPosts() {
+    $("totalCount").textContent = posts.length;
+    $("pendingCount").textContent = posts.filter(p => p.status === "pending_approval").length;
+    $("publishedCount").textContent = posts.filter(p => p.status === "published").length;
+    const root = $("postList"); root.replaceChildren();
+    if (!posts.length) { const empty=document.createElement("div"); empty.className="empty"; empty.textContent="No drafts yet. Create a draft to get started."; root.append(empty); return; }
+    for (const post of posts) {
+      const card=document.createElement("article"); card.className="post";
+      const top=document.createElement("div"); top.className="post-top";
+      const id=document.createElement("span"); id.className="hint"; id.textContent=post.id.slice(0,8);
+      const badge=document.createElement("span"); badge.className="status "+post.status; badge.textContent=statusLabel[post.status] || post.status;
+      top.append(id,badge);
+      const caption=document.createElement("p"); caption.className="caption"; caption.textContent=post.caption;
+      card.append(top,caption);
+      if(post.link){const link=document.createElement("a");link.className="post-link";link.href=post.link;link.target="_blank";link.rel="noopener noreferrer";link.textContent=post.link;card.append(link);}
+      const meta=document.createElement("div");meta.className="meta";meta.textContent="Created "+new Date(post.createdAt).toLocaleString();card.append(meta);
+      const actions=document.createElement("div");actions.className="actions";
+      if(post.status==="pending_approval"){
+        const approve=document.createElement("button");approve.className="primary small";approve.textContent="Approve draft";approve.addEventListener("click",()=>approvePost(post));actions.append(approve);
+      }
+      if(post.status==="approved"){
+        const publish=document.createElement("button");publish.className="primary small";publish.textContent="Publish to Facebook";publish.addEventListener("click",()=>publishPost(post));actions.append(publish);
+      }
+      card.append(actions);root.append(card);
+    }
+  }
+  function renderAudit(events) {
+    const root=$("auditList");root.replaceChildren();
+    if(!events.length){const empty=document.createElement("div");empty.className="empty";empty.textContent="No activity recorded yet.";root.append(empty);return;}
+    for(const event of events.slice(0,12)){
+      const row=document.createElement("div");row.className="audit-item";
+      const action=document.createElement("strong");action.textContent=event.action;
+      const time=document.createElement("span");time.textContent=new Date(event.timestamp).toLocaleString();
+      row.append(action,time);root.append(row);
+    }
+  }
+  async function loadPosts() {
+    if(!agentSecret) return;
+    const data=await api("/api/facebook/posts");posts=data.posts||[];renderPosts();
+  }
+  async function loadAudit() {
+    if(!agentSecret)return;
+    const data=await api("/api/facebook/audit");renderAudit(data.events||[]);
+  }
+  async function refreshAll() {
+    await health();
+    if(!agentSecret){notice("Enter your local agent secret and connect to manage drafts.");return;}
+    try {await Promise.all([loadPosts(),loadAudit()]);notice("Connected to your local AURA API. No post was published by this refresh.","success");}
+    catch(e){notice(e.message+" — check the secret in your local .env file.","error");}
+  }
+  async function approvePost(post) {
+    if(!confirm("Approve this exact draft? Publishing is still a separate action."))return;
+    try {await api("/api/facebook/posts/"+encodeURIComponent(post.id)+"/approve",{method:"POST",body:JSON.stringify({contentHash:post.contentHash})});notice("Draft approved. Publishing has NOT happened yet.","success");await refreshAll();}
+    catch(e){notice(e.message,"error");}
+  }
+  async function publishPost(post) {
+    if(!confirm("Publish this approved draft to the connected Facebook Page now? This action is separate and may publish publicly."))return;
+    try {const data=await api("/api/facebook/posts/"+encodeURIComponent(post.id)+"/publish",{method:"POST",body:"{}"});notice("Publish request completed. Meta post ID: "+(data.metaPostId||"returned by API"),"success");await refreshAll();}
+    catch(e){notice(e.message,"error");}
+  }
+  $("connectBtn").addEventListener("click",async()=>{
+    const candidate=$("secret").value.trim();
+    if(!candidate){notice("Enter the AURA_AGENT_SECRET from your local .env file.","warn");return;}
+    agentSecret=candidate;
+    try {await loadPosts();await loadAudit();$("createBtn").disabled=false;notice("Connected. Your secret is held in memory only.","success");await refreshAll();}
+    catch(e){agentSecret="";$("createBtn").disabled=true;notice(e.message+" — check your local .env secret.","error");}
+  });
+  $("disconnectBtn").addEventListener("click",()=>{agentSecret="";$("secret").value="";$("createBtn").disabled=true;posts=[];renderPosts();renderAudit([]);notice("Secret cleared from this page.");});
+  $("createBtn").addEventListener("click",async()=>{
+    const caption=$("caption").value.trim();const link=$("link").value.trim();
+    if(!caption){notice("Write a caption first.","warn");return;}
+    if(link){try{new URL(link);}catch{notice("Enter a valid full URL beginning with https://","warn");return;}}
+    $("createBtn").disabled=true;
+    try{await api("/api/facebook/posts/draft",{method:"POST",body:JSON.stringify({caption,...(link?{link}:{})})});$("caption").value="";$("link").value="";$("charCount").textContent="0";notice("Draft created. It is awaiting your approval and has not been published.","success");await refreshAll();}
+    catch(e){notice(e.message,"error");}
+    finally{$("createBtn").disabled=!agentSecret;}
+  });
+  $("caption").addEventListener("input",()=>{$("charCount").textContent=$("caption").value.length;});
+  $("refreshBtn").addEventListener("click",refreshAll);$("postsBtn").addEventListener("click",async()=>{try{await loadPosts();notice("Post list refreshed.","success");}catch(e){notice(e.message,"error");}});$("auditBtn").addEventListener("click",async()=>{try{await loadAudit();notice("Audit activity refreshed.","success");}catch(e){notice(e.message,"error");}});
+  health();
+})();
+</script>
+</body>
+</html>
