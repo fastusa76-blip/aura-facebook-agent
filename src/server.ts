@@ -42,23 +42,19 @@ function launch(appKey: string): Promise<string> {
 
 /** Open only a URL constructed by AURA. The URL is base64-encoded before it reaches PowerShell. */
 function openInChrome(url: string): Promise<void> {
-  const encodedUrl = Buffer.from(url, "utf8").toString("base64");
-  const script = "$u=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encodedUrl + "')); " +
-    "$c=@(\"$env:ProgramFiles\\Google\\Chrome\\Application\\chrome.exe\",\"$env:LOCALAPPDATA\\Google\\Chrome\\Application\\chrome.exe\"); " +
-    "$b=$c | Where-Object { Test-Path $_ } | Select-Object -First 1; " +
-    "if ($b) { Start-Process -FilePath $b -ArgumentList @($u) } else { throw 'Google Chrome was not found in its standard install locations.' }";
+  // Only allow YouTube URLs constructed by AURA.
+  if (!/^https:\/\/www\.youtube\.com\/(?:$|results\?search_query=)/.test(url)) {
+    return Promise.reject(new Error("AURA can only open approved YouTube pages."));
+  }
+
+  // Use Windows' registered browser instead of assuming Chrome is in Program Files.
+  // If Chrome is the default browser, YouTube opens there even with a custom install path.
   return new Promise((resolvePromise, reject) => {
-    const child = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
-      windowsHide: true, shell: false, stdio: ["ignore", "ignore", "pipe"]
+    const child = spawn("cmd.exe", ["/c", "start", "", url], {
+      windowsHide: true, shell: false, detached: true, stdio: "ignore"
     });
-    let errorText = "";
-    child.stderr?.setEncoding("utf8");
-    child.stderr?.on("data", (chunk: string) => { errorText += chunk; });
     child.once("error", reject);
-    child.once("close", (code) => {
-      if (code === 0) resolvePromise();
-      else reject(new Error(errorText.trim() || "Could not open Google Chrome. Check that Chrome is installed."));
-    });
+    child.once("spawn", () => { child.unref(); resolvePromise(); });
   });
 }
 
