@@ -40,15 +40,11 @@ function launch(appKey: string): Promise<string> {
   });
 }
 
-/** Open only a URL constructed by AURA. The URL is base64-encoded before it reaches PowerShell. */
-function openInChrome(url: string): Promise<void> {
-  // Only allow YouTube URLs constructed by AURA.
-  if (!/^https:\/\/www\.youtube\.com\/(?:$|results\?search_query=)/.test(url)) {
+function openInBrowser(url: string): Promise<void> {
+  // URLs must be created internally by AURA, never accepted directly from speech.
+  if (!/^https:\/\/www\.youtube(?:music)?\.com\/(?:$|results\?search_query=)/.test(url)) {
     return Promise.reject(new Error("AURA can only open approved YouTube pages."));
   }
-
-  // Use Windows' registered browser instead of assuming Chrome is in Program Files.
-  // If Chrome is the default browser, YouTube opens there even with a custom install path.
   return new Promise((resolvePromise, reject) => {
     const child = spawn("cmd.exe", ["/c", "start", "", url], {
       windowsHide: true, shell: false, detached: true, stdio: "ignore"
@@ -58,11 +54,87 @@ function openInChrome(url: string): Promise<void> {
   });
 }
 
-function youtubeSearchUrl(query: string): string {
-  return "https://www.youtube.com/results?search_query=" + encodeURIComponent(query.trim());
+function youtubeSearchUrl(query: string, music = false): string {
+  return "https://www." + (music ? "youtube.com" : "youtube.com") + "/results?search_query=" + encodeURIComponent(query.trim());
 }
 
-app.get("/health", (_req, res) => res.json({ status: "ok", service: "AURA Windows Voice Agent", mode: "allowlist-only" }));
+function systemStatus(): string {
+  const memoryUsed = Math.round(((os.totalmem() - os.freemem()) / os.totalmem()) * 100);
+  return "Your computer is running. " + os.cpus().length + " CPU cores detected, and memory usage is about " + memoryUsed + "%. ";
+}
+
+function findSongRequest(original: string): string | undefined {
+  const patterns = [
+    /^(?:please\s+)?(?:play|put on|listen to|start playing)(?:\s+(?:the\s+)?(?:song|music|track))?\s+(.+)$/i,
+    /^(?:search|find)\s+(?:youtube\s+for\s+)?(.+?)(?:\s+on\s+youtube)?$/i,
+    /^youtube\s+(?:par|pe)\s+(.+?)\s+(?:chalao|chala\s+do|play\s+karo)$/i,
+    /^(?:gaana|gana|song|music)\s+(?:chalao|chala do|play karo)\s+(.+)$/i,
+    /^یوٹیوب پر\s*(.+?)\s*(?:چلاؤ|چلاؤ|چلا دو)$/,
+    /^(?:چلاؤ|چلا دو)\s*(.+?)$/
+  ];
+  for (const pattern of patterns) {
+    const match = original.trim().match(pattern);
+    if (match?.[1]?.trim()) return match[1].trim().slice(0, 180);
+  }
+  return undefined;
+}
+
+function requestedApp(normalized: string): string | undefined {
+  const patterns: Array<[RegExp, string]> = [
+    [/^(?:open|launch|start|run)\s+(?:google\s+)?chrome$/, "chrome"],
+    [/^(?:open|launch|start|run)\s+(?:the\s+)?notepad$/, "notepad"],
+    [/^(?:open|launch|start|run)\s+(?:the\s+)?(?:calculator|calc)$/, "calculator"],
+    [/^(?:open|launch|start|run)\s+(?:the\s+)?(?:file\s+)?explorer$/, "explorer"],
+    [/^(?:chrome|google chrome)\s+(?:khol|kholo|open karo)$/, "chrome"],
+    [/^(?:notepad)\s+(?:khol|kholo|open karo)$/, "notepad"],
+    [/^(?:کروم|گوگل کروم) کھولو$/, "chrome"],
+    [/^نوٹ پیڈ کھولو$/, "notepad"],
+    [/^(?:calculator|calc)\s+(?:open|kholo|khol)$/, "calculator"]
+  ];
+  return patterns.find(([pattern]) => pattern.test(normalized))?.[1];
+}
+
+async function answerGeneralQuestion(question: string): Promise<string> {
+  if (!config.openaiApiKey) {
+    return "I can answer general questions once an AI API key is configured. Add OPENAI_API_KEY to your local .env file, restart AURA, and ask again. I can already run supported app and YouTube actions. Your API key must stay on your computer—never paste it into GitHub or chat.";
+  }
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + config.openaiApiKey,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: config.openaiModel,
+      temperature: 0.4,
+      messages: [
+        {
+          role: "system",
+          content: "You are AURA, a helpful Windows desktop voice assistant. Answer the user's actual question directly and concisely in the same language they used (English, Urdu, or Roman Urdu). If asked to perform a computer action, do not claim you performed it unless the local app reports success. Never claim to have clicked a YouTube result or started playback if you only opened search results. Do not provide shell commands as if executed. For dangerous or high-impact actions, explain that explicit confirmation is needed."
+        },
+        { role: "user", content: question }
+      ]
+    })
+  });
+  if (!response.ok) {
+    const details = await response.text().catch(() => "");
+    console.error("AI provider request failed:", response.status, details.slice(0, 300));
+    throw new Error(response.status === 401
+      ? "The AI API key was rejected. Check OPENAI_API_KEY in your local .env file."
+      : "The AI service could not answer right now. Check your API connection and account limits.");
+  }
+  const payload = await response.json() as { choices?: Array<{ message?: { content?: string | null } }> };
+  const answer = payload.choices?.[0]?.message?.content?.trim();
+  if (!answer) throw new Error("The AI service returned an empty answer. Please try asking again.");
+  return answer.slice(0, 6000);
+}
+
+app.get("/health", (_req, res) => res.json({
+  status: "ok",
+  service: "AURA Windows Voice Agent",
+  mode: config.openaiApiKey ? "AI answers + allowlisted actions" : "allowlist actions; AI key not configured",
+  aiConfigured: Boolean(config.openaiApiKey)
+}));
 app.get("/api/system", (_req, res) => {
   const total = os.totalmem();
   const free = os.freemem();
@@ -79,51 +151,56 @@ app.post("/api/command", async (req, res) => {
   const original = parsed.data.text.trim();
   const normalized = original.toLowerCase().replace(/[.!؟?]/g, "").trim();
   try {
-    // Exact website intents: never accept a user-supplied arbitrary URL.
-    if (/^(?:open|launch|go to|کھولو)\s+(?:youtube|you tube)(?:\s+in\s+chrome)?$/.test(normalized) ||
+    if (/^(?:hi|hello|hey aura|hello aura|سلام|السلام علیکم|assalam o alaikum|salam)$/i.test(normalized)) {
+      const message = /[\u0600-\u06FF]/.test(original) || /salam|assalam/i.test(original)
+        ? "وعلیکم السلام! میں AURA ہوں۔ آپ کیا کرنا یا پوچھنا چاہتے ہیں؟"
+        : "Hello! I'm AURA. What would you like to ask or do?";
+      await audit("conversation.greeting", "success", { command: original });
+      res.json({ ok: true, message, type: "conversation" });
+      return;
+    }
+
+    if (/^(?:open|launch|go to|show)\s+(?:youtube|you tube)(?:\s+in\s+(?:chrome|browser))?$/.test(normalized) ||
         /^(?:یوٹیوب کھولو|یوٹیوب چلاؤ|یوٹیوب چلاو)$/.test(normalized)) {
-      await openInChrome("https://www.youtube.com/");
-      const message = "YouTube is opening in your default browser. If Chrome is set as your default browser, it will open there.";
+      await openInBrowser("https://www.youtube.com/");
+      const message = "YouTube is opening in your default browser. To open it in Chrome, set Chrome as your Windows default browser.";
       await audit("command.executed", "success", { command: original, action: "open_youtube" });
-      res.json({ ok: true, message });
+      res.json({ ok: true, message, type: "action" });
       return;
     }
 
-    // Song names are search text, encoded as a URL parameter, not treated as code.
-    const songMatch =
-      original.match(/^(?:please\s+)?(?:play(?:\s+(?:the\s+)?song)?|search\s+youtube\s+for|find\s+on\s+youtube)\s+(.+)$/i) ||
-      original.match(/^youtube\s+(?:par|pe)\s+(.+?)\s+(?:chalao|chala\s+do|play\s+karo)$/i) ||
-      original.match(/^یوٹیوب پر\s*(.+?)\s*(?:چلاؤ|چلاؤ|چلا دو)$/);
-    if (songMatch?.[1]?.trim()) {
-      const song = songMatch[1].trim().slice(0, 180);
-      await openInChrome(youtubeSearchUrl(song));
-      const message = 'I opened YouTube search for "' + song + '" in Chrome. Choose the correct result to start playback; YouTube may not allow reliable autoplay from a new page.';
+    // Song/music intent is handled before general Q&A so the AI cannot merely describe the action.
+    const song = findSongRequest(original);
+    if (song && /^(?:play|put on|listen to|start playing|search|find|youtube|gaana|gana|song|music|چلاؤ|چلا دو|یوٹیوب پر)/i.test(original)) {
+      const query = /^(?:play|put on|listen to|start playing)/i.test(original) ? song + " song" : song;
+      await openInBrowser(youtubeSearchUrl(query));
+      const message = 'I opened YouTube search for "' + song + '". Click the correct video to start playback; YouTube does not reliably allow AURA to auto-click a result.';
       await audit("command.executed", "success", { command: original, action: "youtube_search", query: song });
-      res.json({ ok: true, message });
+      res.json({ ok: true, message, type: "action" });
       return;
     }
 
-    let message: string;
-    if (/^(system status|system diagnostics|کمپیوٹر کی حالت|سسٹم کی حالت|میرے کمپیوٹر کی حالت بتاؤ)$/.test(normalized)) {
-      const memoryUsed = Math.round(((os.totalmem() - os.freemem()) / os.totalmem()) * 100);
-      message = "System is running. " + os.cpus().length + " CPU cores detected. Memory usage is about " + memoryUsed + "%.";
-    } else {
-      const launchMatch = normalized.match(/^(open|launch|کھولو|چلاؤ)\s+(chrome|google chrome|notepad|calculator|calc|explorer|file explorer)$/);
-      const appName = launchMatch?.[2]?.replace("google chrome", "chrome").replace("file explorer", "explorer").replace("calc", "calculator");
-      if (!appName || !apps[appName]) {
-        await audit("command.rejected", "denied", { command: original });
-        res.json({
-          ok: false, requiresApproval: false,
-          message: "I don't support that command yet. Try “Open YouTube”, “Play Atif Aslam”, “Open Chrome”, “Open Notepad”, or “System status”. For safety, AURA does not execute arbitrary spoken shell commands."
-        });
-        return;
-      }
-      message = await launch(appName);
+    const appKey = requestedApp(normalized);
+    if (appKey) {
+      const message = await launch(appKey);
+      await audit("command.executed", "success", { command: original, action: appKey });
+      res.json({ ok: true, message, type: "action" });
+      return;
     }
-    await audit("command.executed", "success", { command: original, action: message });
-    res.json({ ok: true, message });
+
+    if (/^(?:system status|system diagnostics|computer status|how is my computer|کمپیوٹر کی حالت|سسٹم کی حالت|میرے کمپیوٹر کی حالت بتاؤ)$/.test(normalized)) {
+      const message = systemStatus();
+      await audit("command.executed", "success", { command: original, action: "system_status" });
+      res.json({ ok: true, message, type: "answer" });
+      return;
+    }
+
+    // Unknown requests become conversational questions, not a canned "unsupported command" reply.
+    const message = await answerGeneralQuestion(original);
+    await audit("conversation.answered", "success", { command: original, provider: config.openaiModel });
+    res.json({ ok: true, message, type: "answer" });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Command failed.";
+    const errorMessage = error instanceof Error ? error.message : "AURA could not complete the request.";
     await audit("command.failed", "error", { command: original, error: errorMessage });
     res.status(500).json({ ok: false, message: errorMessage });
   }
@@ -145,4 +222,5 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 });
 app.listen(config.port, config.host, () => {
   console.log("AURA Voice Agent listening on http://" + config.host + ":" + config.port);
+  console.log(config.openaiApiKey ? "AI question answering is configured." : "AI question answering is not configured; add OPENAI_API_KEY to local .env.");
 });
