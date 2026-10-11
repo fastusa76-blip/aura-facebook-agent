@@ -8,6 +8,8 @@ test("server exposes safe, allowlisted command handling and AI fallback", async 
   assert.match(source, /const apps: Record<string/);
   assert.match(source, /shell: false/);
   assert.match(source, /answerGeneralQuestion/);
+  assert.match(source, /api\/ai\/status/);
+  assert.match(source, /api\.openai\.com\/v1\/models/);
   assert.match(source, /api\.openai\.com\/v1\/chat\/completions/);
   assert.doesNotMatch(source, /exec\(parsed\.data\.text/);
 });
@@ -18,6 +20,7 @@ test("dashboard provides voice and text controls", async () => {
   assert.match(html, /commandForm/);
   assert.match(html, /api\/command/);
   assert.match(html, /Ask anything/);
+  assert.match(html, /Verify AI API key/);
 });
 
 test("song requests are routed to YouTube rather than treated as general questions", async () => {
