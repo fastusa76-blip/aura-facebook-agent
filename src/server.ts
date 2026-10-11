@@ -135,6 +135,34 @@ app.get("/health", (_req, res) => res.json({
   mode: config.openaiApiKey ? "AI answers + allowlisted actions" : "allowlist actions; AI key not configured",
   aiConfigured: Boolean(config.openaiApiKey)
 }));
+app.get("/api/ai/status", async (_req, res) => {
+  if (!config.openaiApiKey) {
+    res.json({ configured: false, valid: false, status: "missing", message: "OPENAI_API_KEY is missing from the local .env file." });
+    return;
+  }
+  try {
+    const response = await fetch("https://api.openai.com/v1/models", {
+      headers: { "Authorization": "Bearer " + config.openaiApiKey },
+      signal: AbortSignal.timeout(10000)
+    });
+    if (response.ok) {
+      res.json({ configured: true, valid: true, status: "valid", model: config.openaiModel, message: "API key authenticated successfully. Model access and billing still depend on your OpenAI project." });
+      return;
+    }
+    if (response.status === 401) {
+      res.json({ configured: true, valid: false, status: "invalid", message: "OpenAI rejected the API key. Check or replace it in your local .env file." });
+      return;
+    }
+    if (response.status === 403) {
+      res.json({ configured: true, valid: false, status: "restricted", message: "The API key was received but access is restricted. Check project permissions or organization settings." });
+      return;
+    }
+    res.status(502).json({ configured: true, valid: null, status: "unverified", message: "OpenAI returned HTTP " + response.status + ". Check API availability, limits, and project settings." });
+  } catch {
+    res.status(502).json({ configured: true, valid: null, status: "unreachable", message: "Could not reach OpenAI to verify the key. Check your internet connection and try again." });
+  }
+});
+
 app.get("/api/system", (_req, res) => {
   const total = os.totalmem();
   const free = os.freemem();
