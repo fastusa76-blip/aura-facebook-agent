@@ -1,5 +1,6 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import { timingSafeEqual } from "node:crypto";
+import { resolve } from "node:path";
 import { config } from "./config.js";
 import { ApproveDraftSchema, CreateDraftSchema } from "./facebook/schemas.js";
 import { addDraft, approveDraft, audit, getDraft, listAuditEvents, listDrafts, markFailed, markPublished } from "./facebook/store.js";
@@ -7,6 +8,8 @@ import { publishApprovedDraft, PublishingNotConfiguredError } from "./facebook/p
 const app = express();
 app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
+// Serve the local dashboard from the repository's public directory.
+app.use(express.static(resolve(process.cwd(), "public")));
 function safeEqual(a: string, b: string): boolean {
   const left = Buffer.from(a); const right = Buffer.from(b);
   return left.length === right.length && timingSafeEqual(left, right);
