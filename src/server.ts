@@ -170,7 +170,8 @@ app.post("/api/command", async (req, res) => {
     }
 
     // Song/music intent is handled before general Q&A so the AI cannot merely describe the action.
-    const song = findSongRequest(original);
+    const detectedSong = findSongRequest(original);
+    const song = detectedSong && /^(?:enif|enife|enifeslam|atifaslam)$/i.test(detectedSong.replace(/[ ._-]/g, "")) ? "Atif Aslam" : detectedSong;
     if (song && /^(?:play|put on|listen to|start playing|search|find|youtube|gaana|gana|song|music|چلاؤ|چلا دو|یوٹیوب پر)/i.test(original)) {
       const query = /^(?:play|put on|listen to|start playing)/i.test(original) ? song + " song" : song;
       await openInBrowser(youtubeSearchUrl(query));
