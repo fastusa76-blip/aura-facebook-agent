@@ -83,7 +83,7 @@ app.post("/api/command", async (req, res) => {
     if (/^(?:open|launch|go to|کھولو)\s+(?:youtube|you tube)(?:\s+in\s+chrome)?$/.test(normalized) ||
         /^(?:یوٹیوب کھولو|یوٹیوب چلاؤ|یوٹیوب چلاو)$/.test(normalized)) {
       await openInChrome("https://www.youtube.com/");
-      const message = "YouTube is opening in Google Chrome.";
+      const message = "YouTube is opening in your default browser. If Chrome is set as your default browser, it will open there.";
       await audit("command.executed", "success", { command: original, action: "open_youtube" });
       res.json({ ok: true, message });
       return;
