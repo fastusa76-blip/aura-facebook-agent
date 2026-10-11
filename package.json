@@ -1,18 +1,16 @@
 {
-  "name": "aura-facebook-agent",
+  "name": "aura-windows-voice-agent",
   "version": "0.1.0",
   "private": true,
-  "description": "AURA Facebook Page automation agent with approval-gated publishing and Urdu video workflow",
+  "description": "AURA local-first Windows voice assistant with allowlisted actions and audit logging",
   "type": "module",
-  "engines": {
-    "node": ">=20"
-  },
+  "engines": { "node": ">=20" },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "tsx --test tests/approval.test.ts",
+    "test": "tsx --test tests/agent.test.ts",
     "check": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
