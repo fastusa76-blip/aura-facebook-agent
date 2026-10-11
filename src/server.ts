@@ -40,6 +40,32 @@ function launch(appKey: string): Promise<string> {
   });
 }
 
+/** Open only a URL constructed by AURA. The URL is base64-encoded before it reaches PowerShell. */
+function openInChrome(url: string): Promise<void> {
+  const encodedUrl = Buffer.from(url, "utf8").toString("base64");
+  const script = "$u=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encodedUrl + "')); " +
+    "$c=@(\"$env:ProgramFiles\\Google\\Chrome\\Application\\chrome.exe\",\"$env:LOCALAPPDATA\\Google\\Chrome\\Application\\chrome.exe\"); " +
+    "$b=$c | Where-Object { Test-Path $_ } | Select-Object -First 1; " +
+    "if ($b) { Start-Process -FilePath $b -ArgumentList @($u) } else { throw 'Google Chrome was not found in its standard install locations.' }";
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
+      windowsHide: true, shell: false, stdio: ["ignore", "ignore", "pipe"]
+    });
+    let errorText = "";
+    child.stderr?.setEncoding("utf8");
+    child.stderr?.on("data", (chunk: string) => { errorText += chunk; });
+    child.once("error", reject);
+    child.once("close", (code) => {
+      if (code === 0) resolvePromise();
+      else reject(new Error(errorText.trim() || "Could not open Google Chrome. Check that Chrome is installed."));
+    });
+  });
+}
+
+function youtubeSearchUrl(query: string): string {
+  return "https://www.youtube.com/results?search_query=" + encodeURIComponent(query.trim());
+}
+
 app.get("/health", (_req, res) => res.json({ status: "ok", service: "AURA Windows Voice Agent", mode: "allowlist-only" }));
 app.get("/api/system", (_req, res) => {
   const total = os.totalmem();
@@ -50,33 +76,63 @@ app.get("/api/system", (_req, res) => {
     memoryTotalBytes: total, memoryFreeBytes: free, memoryUsedPercent: Math.round(((total - free) / total) * 100)
   });
 });
+
 app.post("/api/command", async (req, res) => {
   const parsed = CommandSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Please send a valid voice command." }); return; }
-  const normalized = parsed.data.text.toLowerCase().replace(/[.!؟?]/g, "").trim();
+  const original = parsed.data.text.trim();
+  const normalized = original.toLowerCase().replace(/[.!؟?]/g, "").trim();
   try {
+    // Exact website intents: never accept a user-supplied arbitrary URL.
+    if (/^(?:open|launch|go to|کھولو)\s+(?:youtube|you tube)(?:\s+in\s+chrome)?$/.test(normalized) ||
+        /^(?:یوٹیوب کھولو|یوٹیوب چلاؤ|یوٹیوب چلاو)$/.test(normalized)) {
+      await openInChrome("https://www.youtube.com/");
+      const message = "YouTube is opening in Google Chrome.";
+      await audit("command.executed", "success", { command: original, action: "open_youtube" });
+      res.json({ ok: true, message });
+      return;
+    }
+
+    // Song names are search text, encoded as a URL parameter, not treated as code.
+    const songMatch =
+      original.match(/^(?:please\s+)?(?:play(?:\s+(?:the\s+)?song)?|search\s+youtube\s+for|find\s+on\s+youtube)\s+(.+)$/i) ||
+      original.match(/^youtube\s+(?:par|pe)\s+(.+?)\s+(?:chalao|chala\s+do|play\s+karo)$/i) ||
+      original.match(/^یوٹیوب پر\s*(.+?)\s*(?:چلاؤ|چلاؤ|چلا دو)$/);
+    if (songMatch?.[1]?.trim()) {
+      const song = songMatch[1].trim().slice(0, 180);
+      await openInChrome(youtubeSearchUrl(song));
+      const message = 'I opened YouTube search for "' + song + '" in Chrome. Choose the correct result to start playback; YouTube may not allow reliable autoplay from a new page.';
+      await audit("command.executed", "success", { command: original, action: "youtube_search", query: song });
+      res.json({ ok: true, message });
+      return;
+    }
+
     let message: string;
     if (/^(system status|system diagnostics|کمپیوٹر کی حالت|سسٹم کی حالت|میرے کمپیوٹر کی حالت بتاؤ)$/.test(normalized)) {
       const memoryUsed = Math.round(((os.totalmem() - os.freemem()) / os.totalmem()) * 100);
-      message = `System is running. ${os.cpus().length} CPU cores detected. Memory usage is about ${memoryUsed}%.`;
+      message = "System is running. " + os.cpus().length + " CPU cores detected. Memory usage is about " + memoryUsed + "%.";
     } else {
       const launchMatch = normalized.match(/^(open|launch|کھولو|چلاؤ)\s+(chrome|google chrome|notepad|calculator|calc|explorer|file explorer)$/);
       const appName = launchMatch?.[2]?.replace("google chrome", "chrome").replace("file explorer", "explorer").replace("calc", "calculator");
       if (!appName || !apps[appName]) {
-        await audit("command.rejected", "denied", { command: parsed.data.text });
-        res.json({ ok: false, requiresApproval: false, message: "I can open Chrome, Notepad, Calculator, or File Explorer, and report basic system status. That command is not supported yet." });
+        await audit("command.rejected", "denied", { command: original });
+        res.json({
+          ok: false, requiresApproval: false,
+          message: "I don't support that command yet. Try “Open YouTube”, “Play Atif Aslam”, “Open Chrome”, “Open Notepad”, or “System status”. For safety, AURA does not execute arbitrary spoken shell commands."
+        });
         return;
       }
       message = await launch(appName);
     }
-    await audit("command.executed", "success", { command: parsed.data.text, action: message });
+    await audit("command.executed", "success", { command: original, action: message });
     res.json({ ok: true, message });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Command failed.";
-    await audit("command.failed", "error", { command: parsed.data.text, error: message });
-    res.status(500).json({ ok: false, message });
+    const errorMessage = error instanceof Error ? error.message : "Command failed.";
+    await audit("command.failed", "error", { command: original, error: errorMessage });
+    res.status(500).json({ ok: false, message: errorMessage });
   }
 });
+
 app.get("/api/audit", async (_req, res) => {
   try {
     const { readFile } = await import("node:fs/promises");
@@ -92,5 +148,5 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   res.status(400).json({ error: message });
 });
 app.listen(config.port, config.host, () => {
-  console.log(`AURA Voice Agent listening on http://${config.host}:${config.port}`);
+  console.log("AURA Voice Agent listening on http://" + config.host + ":" + config.port);
 });
