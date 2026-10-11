@@ -1,48 +1,40 @@
 # AURA Windows Voice AI
 
-A local-first starter for a professional Windows desktop assistant controlled by voice or text. This repository is no longer a Facebook publishing agent.
+A local-first Windows desktop assistant controlled by voice or text.
 
-## Current MVP
-- Browser dashboard with microphone button, transcript, spoken responses, and system overview.
-- Basic read-only system diagnostics.
-- Explicit allowlist for launching Chrome, Notepad, Calculator, and File Explorer.
-- Local JSONL audit log in `data/audit.jsonl`.
-- Server binds to `127.0.0.1` by default.
-- No arbitrary PowerShell, CMD, or shell execution from voice input.
+## Current capabilities
+- Browser dashboard with microphone input, transcript, spoken responses, and system overview.
+- Opens YouTube in Google Chrome using a fixed HTTPS URL.
+- Song requests such as \`Play Atif Aslam\`, \`Play Pasoori song\`, or \`YouTube par Atif Aslam chalao\` open a YouTube search for the requested title.
+- Launches Chrome, Notepad, Calculator, and File Explorer.
+- Reports basic system diagnostics and writes a local JSONL audit log to \`data/audit.jsonl\`.
+- Server binds to \`127.0.0.1\` by default.
 
-## Requirements
+## Requirements and startup
 - Windows 10/11
 - Node.js 20 or later and npm
-- A supported browser for Web Speech API microphone input (support and language accuracy vary by browser/provider)
+- A supported browser for Web Speech API microphone input
 
-## Run locally
-```powershell
+\`\`\`powershell
 npm install
-npm run typecheck
-npm test
+npm run check
 npm run dev
-```
+\`\`\`
+
 Open http://127.0.0.1:4317. If the microphone is unavailable, use the text command field.
 
-## Supported starter commands
-- `Open Chrome`
-- `Open Notepad`
-- `Open Calculator`
-- `Open File Explorer`
-- `System status`
-- Urdu diagnostics aliases: `کمپیوٹر کی حالت`, `سسٹم کی حالت`
+## Example commands
+- \`Open YouTube\` / \`یوٹیوب کھولو\`
+- \`Play Atif Aslam\`
+- \`Play Pasoori song\`
+- \`YouTube par Atif Aslam chalao\`
+- \`Open Chrome\`, \`Open Notepad\`, \`Open Calculator\`, \`Open File Explorer\`
+- \`System status\` / \`کمپیوٹر کی حالت\`
 
-The first version deliberately uses a fixed allowlist. It does not yet include a cloud/local LLM, wake-word detection, unrestricted file operations, or general-purpose automation. Browser speech recognition may send audio to the browser vendor's recognition service; check your browser's privacy settings.
+## Important limitations
+A song command opens YouTube search results. AURA does not automatically choose a video or guarantee playback because results can be ambiguous and YouTube/browser autoplay policies vary. Click the correct result to start the song.
+
+This version intentionally does not execute arbitrary spoken PowerShell, CMD, or shell commands. Unknown commands are rejected rather than guessed. File deletion, registry edits, process termination, network resets, purchases, and other consequential actions need separate typed plans, previews, explicit approval, and audit logging before implementation. Browser speech recognition may send audio to the browser provider; review your browser privacy settings.
 
 ## Safety model
-Natural-language input is treated as untrusted. The server maps only exact supported patterns to predefined actions and launches allowlisted applications without a shell. Unknown commands are rejected. Never add an endpoint that runs arbitrary user-supplied shell strings. Before adding file deletion, registry edits, network resets, or process termination, implement dry-run previews, explicit confirmation, capability checks, and audit records.
-
-## Roadmap
-1. Starter dashboard, voice/text commands, basic diagnostics, allowlisted app launching.
-2. Local speech recognition option and Urdu/Roman Urdu intent normalization.
-3. Typed action plans, risk labels, dry-run previews, explicit approval, and verification.
-4. Secure local memory, settings, tests, and persistent audit review.
-5. Optional LLM provider behind a policy engine; AI proposes plans but never executes shell commands directly.
-6. Windows packaging and installer after integration tests pass.
-
-This is an early development scaffold, not a production-ready autonomous agent.
+Natural-language input is untrusted. The server maps supported phrases to predefined actions and launches programs with shell execution disabled where possible. Website navigation is restricted to AURA-generated YouTube URLs; song names are URL-encoded and never interpreted as commands.
