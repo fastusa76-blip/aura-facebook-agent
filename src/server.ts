@@ -1,62 +1,96 @@
-import express, { type NextFunction, type Request, type Response } from "express";
-import { timingSafeEqual } from "node:crypto";
+import express, { type Request, type Response, type NextFunction } from "express";
+import { spawn } from "node:child_process";
+import os from "node:os";
+import { appendFile, mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
+import { z } from "zod";
 import { config } from "./config.js";
-import { ApproveDraftSchema, CreateDraftSchema } from "./facebook/schemas.js";
-import { addDraft, approveDraft, audit, getDraft, listAuditEvents, listDrafts, markFailed, markPublished } from "./facebook/store.js";
-import { publishApprovedDraft, PublishingNotConfiguredError } from "./facebook/publisher.js";
+
 const app = express();
 app.disable("x-powered-by");
-app.use(express.json({ limit: "256kb" }));
-// Serve the local dashboard from the repository's public directory.
+app.use(express.json({ limit: "32kb" }));
 app.use(express.static(resolve(process.cwd(), "public")));
-function safeEqual(a: string, b: string): boolean {
-  const left = Buffer.from(a); const right = Buffer.from(b);
-  return left.length === right.length && timingSafeEqual(left, right);
+const auditDir = resolve(process.cwd(), "data");
+const auditPath = resolve(auditDir, "audit.jsonl");
+
+async function audit(event: string, outcome: string, details: Record<string, unknown> = {}) {
+  await mkdir(auditDir, { recursive: true });
+  await appendFile(auditPath, JSON.stringify({ at: new Date().toISOString(), event, outcome, details }) + "\n", "utf8");
 }
-function requireAgentSecret(req: Request, res: Response, next: NextFunction): void {
-  const header = req.header("authorization") ?? "";
-  const supplied = header.startsWith("Bearer ") ? header.slice(7) : "";
-  if (!supplied || !safeEqual(supplied, config.agentSecret)) {
-    audit("auth.denied", "denied"); res.status(401).json({ error: "Unauthorized" }); return;
-  }
-  next();
+
+const CommandSchema = z.object({
+  text: z.string().trim().min(1).max(500),
+  approved: z.boolean().optional().default(false)
+});
+
+const apps: Record<string, { label: string; file: string; args: string[] }> = {
+  chrome: { label: "Google Chrome", file: "cmd.exe", args: ["/c", "start", "", "chrome"] },
+  notepad: { label: "Notepad", file: "notepad.exe", args: [] },
+  calculator: { label: "Calculator", file: "calc.exe", args: [] },
+  explorer: { label: "File Explorer", file: "explorer.exe", args: [] }
+};
+
+function launch(appKey: string): Promise<string> {
+  const item = apps[appKey];
+  if (!item) return Promise.reject(new Error("This application is not on AURA's allowlist."));
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn(item.file, item.args, { windowsHide: true, shell: false, detached: true, stdio: "ignore" });
+    child.once("error", reject);
+    child.once("spawn", () => { child.unref(); resolvePromise(item.label + " launch requested."); });
+  });
 }
-app.get("/health", (_req, res) => res.json({ status: "ok", service: "aura-facebook-agent", mode: "approval-gated" }));
-app.use("/api", requireAgentSecret);
-app.post("/api/facebook/posts/draft", (req, res) => {
-  const parsed = CreateDraftSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: "Invalid draft", issues: parsed.error.issues }); return; }
-  const draft = addDraft(parsed.data); res.status(201).json({ draft, approvalRequired: true });
+
+app.get("/health", (_req, res) => res.json({ status: "ok", service: "AURA Windows Voice Agent", mode: "allowlist-only" }));
+app.get("/api/system", (_req, res) => {
+  const total = os.totalmem();
+  const free = os.freemem();
+  res.json({
+    platform: os.platform(), hostname: os.hostname(), uptimeSeconds: Math.round(os.uptime()),
+    cpuModel: os.cpus()[0]?.model ?? "Unknown", cpuCores: os.cpus().length,
+    memoryTotalBytes: total, memoryFreeBytes: free, memoryUsedPercent: Math.round(((total - free) / total) * 100)
+  });
 });
-app.get("/api/facebook/posts", (_req, res) => res.json({ posts: listDrafts() }));
-app.post("/api/facebook/posts/:id/approve", (req, res) => {
-  const parsed = ApproveDraftSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: "Invalid approval request", issues: parsed.error.issues }); return; }
-  const id = req.params.id ?? ""; const draft = approveDraft(id, parsed.data.contentHash);
-  if (!draft) { audit("draft.approval_denied", "denied", id); res.status(409).json({ error: "Draft not found, already processed, or content hash mismatch" }); return; }
-  res.json({ draft, message: "Draft approved. Publishing is a separate explicit action." });
-});
-app.post("/api/facebook/posts/:id/publish", async (req, res) => {
-  const id = req.params.id ?? ""; const draft = getDraft(id);
-  if (!draft) { res.status(404).json({ error: "Draft not found" }); return; }
-  if (draft.status !== "approved") {
-    audit("post.publish_denied", "denied", draft.id, { reason: "approval_required" });
-    res.status(409).json({ error: "Approval is required before publishing" }); return;
-  }
+app.post("/api/command", async (req, res) => {
+  const parsed = CommandSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Please send a valid voice command." }); return; }
+  const normalized = parsed.data.text.toLowerCase().replace(/[.!؟?]/g, "").trim();
   try {
-    const metaPostId = await publishApprovedDraft(draft);
-    const updated = markPublished(draft.id, metaPostId); res.json({ post: updated, metaPostId });
+    let message: string;
+    if (/^(system status|system diagnostics|کمپیوٹر کی حالت|سسٹم کی حالت|میرے کمپیوٹر کی حالت بتاؤ)$/.test(normalized)) {
+      const memoryUsed = Math.round(((os.totalmem() - os.freemem()) / os.totalmem()) * 100);
+      message = `System is running. ${os.cpus().length} CPU cores detected. Memory usage is about ${memoryUsed}%.`;
+    } else {
+      const launchMatch = normalized.match(/^(open|launch|کھولو|چلاؤ)\s+(chrome|google chrome|notepad|calculator|calc|explorer|file explorer)$/);
+      const appName = launchMatch?.[2]?.replace("google chrome", "chrome").replace("file explorer", "explorer").replace("calc", "calculator");
+      if (!appName || !apps[appName]) {
+        await audit("command.rejected", "denied", { command: parsed.data.text });
+        res.json({ ok: false, requiresApproval: false, message: "I can open Chrome, Notepad, Calculator, or File Explorer, and report basic system status. That command is not supported yet." });
+        return;
+      }
+      message = await launch(appName);
+    }
+    await audit("command.executed", "success", { command: parsed.data.text, action: message });
+    res.json({ ok: true, message });
   } catch (error) {
-    const message = error instanceof PublishingNotConfiguredError ? error.message :
-      error instanceof Error ? error.message : "Unknown publishing error";
-    markFailed(id, message);
-    res.status(error instanceof PublishingNotConfiguredError ? 503 : 502).json({ error: message });
+    const message = error instanceof Error ? error.message : "Command failed.";
+    await audit("command.failed", "error", { command: parsed.data.text, error: message });
+    res.status(500).json({ ok: false, message });
   }
 });
-app.get("/api/facebook/audit", (_req, res) => res.json({ events: listAuditEvents() }));
+app.get("/api/audit", async (_req, res) => {
+  try {
+    const { readFile } = await import("node:fs/promises");
+    const raw = await readFile(auditPath, "utf8").catch(() => "");
+    const events = raw.split("\n").filter(Boolean).slice(-50).reverse().map((line) => {
+      try { return JSON.parse(line) as Record<string, unknown>; } catch { return { event: "invalid_audit_line" }; }
+    });
+    res.json({ events });
+  } catch { res.json({ events: [] }); }
+});
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   const message = err instanceof Error ? err.message : "Unexpected server error";
   res.status(400).json({ error: message });
 });
-app.listen(config.port, config.host, () => console.log("AURA Facebook Agent listening on http://" + config.host + ":" + config.port));
+app.listen(config.port, config.host, () => {
+  console.log(`AURA Voice Agent listening on http://${config.host}:${config.port}`);
+});
