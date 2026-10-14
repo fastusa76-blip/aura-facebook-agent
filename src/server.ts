@@ -131,7 +131,7 @@ async function answerGeneralQuestion(question: string): Promise<string> {
 app.get("/health", (_req, res) => res.json({
   status: "ok",
   service: "AURA Windows Voice Agent",
-  mode: config.geminiApiKey ? "AI answers + allowlisted actions" : "allowlist actions; AI key not configured",
+  mode: config.geminiApiKey ? "Gemini answers + allowlisted actions" : "allowlist actions; Gemini key not configured",
   aiConfigured: Boolean(config.geminiApiKey)
 }));
 app.get("/api/ai/status", async (_req, res) => {
