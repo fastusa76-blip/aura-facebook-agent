@@ -3,14 +3,15 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-test("server exposes safe, allowlisted command handling and AI fallback", async () => {
+test("server exposes safe, allowlisted command handling and Gemini AI fallback", async () => {
   const source = await readFile(resolve(process.cwd(), "src/server.ts"), "utf8");
   assert.match(source, /const apps: Record<string/);
   assert.match(source, /shell: false/);
   assert.match(source, /answerGeneralQuestion/);
   assert.match(source, /api\/ai\/status/);
-  assert.match(source, /api\/ai\/status/);
-  assert.match(source, /GoogleGenAI/);\n  assert.match(source, /geminiApiKey/);\n  assert.match(source, /GEMINI_API_KEY/);
+  assert.match(source, /GoogleGenAI/);
+  assert.match(source, /geminiApiKey/);
+  assert.match(source, /GEMINI_API_KEY/);
   assert.doesNotMatch(source, /exec\(parsed\.data\.text/);
 });
 
@@ -20,7 +21,7 @@ test("dashboard provides voice and text controls", async () => {
   assert.match(html, /commandForm/);
   assert.match(html, /api\/command/);
   assert.match(html, /Ask anything/);
-  assert.match(html, /Verify AI API key/);
+  assert.match(html, /Verify Gemini API key/);
 });
 
 test("song requests are routed to YouTube rather than treated as general questions", async () => {
