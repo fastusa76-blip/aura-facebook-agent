@@ -1,4 +1,5 @@
 import express, { type Request, type Response, type NextFunction } from "express";
+import { GoogleGenAI } from "@google/genai";
 import { spawn } from "node:child_process";
 import os from "node:os";
 import { appendFile, mkdir } from "node:fs/promises";
@@ -95,74 +96,72 @@ function requestedApp(normalized: string): string | undefined {
 }
 
 async function answerGeneralQuestion(question: string): Promise<string> {
-  if (!config.openaiApiKey) {
-    return "I can answer general questions once an AI API key is configured. Add OPENAI_API_KEY to your local .env file, restart AURA, and ask again. I can already run supported app and YouTube actions. Your API key must stay on your computer—never paste it into GitHub or chat.";
+  if (!config.geminiApiKey) {
+    return "I can answer general questions once Google Gemini is configured. Create a Gemini API key in Google AI Studio, add GEMINI_API_KEY to your local .env file, restart AURA, and ask again. Supported app and YouTube actions can work without an AI key. Keep the key on your computer—never paste it into GitHub or chat.";
   }
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": "Bearer " + config.openaiApiKey,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: config.openaiModel,
-      temperature: 0.4,
-      messages: [
-        {
-          role: "system",
-          content: "You are AURA, a helpful Windows desktop voice assistant. Answer the user's actual question directly and concisely in the same language they used (English, Urdu, or Roman Urdu). If asked to perform a computer action, do not claim you performed it unless the local app reports success. Never claim to have clicked a YouTube result or started playback if you only opened search results. Do not provide shell commands as if executed. For dangerous or high-impact actions, explain that explicit confirmation is needed."
-        },
-        { role: "user", content: question }
-      ]
-    })
-  });
-  if (!response.ok) {
-    const details = await response.text().catch(() => "");
-    console.error("AI provider request failed:", response.status, details.slice(0, 300));
-    throw new Error(response.status === 401
-      ? "The AI API key was rejected. Check OPENAI_API_KEY in your local .env file."
-      : "The AI service could not answer right now. Check your API connection and account limits.");
+  const ai = new GoogleGenAI({ apiKey: config.geminiApiKey });
+  try {
+    const response = await ai.models.generateContent({
+      model: config.geminiModel,
+      contents: question,
+      config: {
+        temperature: 0.4,
+        systemInstruction: "You are AURA, a helpful Windows desktop voice assistant. Answer the user's actual question directly and concisely in the same language they used (English, Urdu, or Roman Urdu). If asked to perform a computer action, do not claim you performed it unless the local app reports success. Never claim to have clicked a YouTube result or started playback if you only opened search results. Do not provide shell commands as if executed. For dangerous or high-impact actions, explain that explicit confirmation is needed."
+      }
+    });
+    const answer = response.text?.trim();
+    if (!answer) throw new Error("Gemini returned an empty answer. Please try asking again.");
+    return answer.slice(0, 6000);
+  } catch (error) {
+    const status = typeof error === "object" && error !== null && "status" in error
+      ? Number((error as { status?: unknown }).status)
+      : 0;
+    console.error("Gemini request failed:", status || "unknown", error instanceof Error ? error.message.slice(0, 200) : "");
+    if (status === 401 || status === 403) {
+      throw new Error("Google Gemini rejected the API key or its permissions. Check GEMINI_API_KEY and ensure the key is enabled for the Gemini API.");
+    }
+    if (status === 429) {
+      throw new Error("Gemini rate limit or quota reached. Check Google AI Studio usage and limits.");
+    }
+    if (error instanceof Error && error.message.includes("Gemini returned an empty answer")) throw error;
+    throw new Error("Gemini could not answer right now. Check your internet connection, model access, and Google AI Studio quota.");
   }
-  const payload = await response.json() as { choices?: Array<{ message?: { content?: string | null } }> };
-  const answer = payload.choices?.[0]?.message?.content?.trim();
-  if (!answer) throw new Error("The AI service returned an empty answer. Please try asking again.");
-  return answer.slice(0, 6000);
 }
 
 app.get("/health", (_req, res) => res.json({
   status: "ok",
   service: "AURA Windows Voice Agent",
-  mode: config.openaiApiKey ? "AI answers + allowlisted actions" : "allowlist actions; AI key not configured",
-  aiConfigured: Boolean(config.openaiApiKey)
+  mode: config.GeminiApiKey ? "AI answers + allowlisted actions" : "allowlist actions; AI key not configured",
+  aiConfigured: Boolean(config.GeminiApiKey)
 }));
 app.get("/api/ai/status", async (_req, res) => {
-  if (!config.openaiApiKey) {
-    res.json({ configured: false, valid: false, status: "missing", message: "OPENAI_API_KEY is missing from the local .env file." });
+  if (!config.geminiApiKey) {
+    res.json({ configured: false, valid: false, status: "missing", message: "GEMINI_API_KEY is missing from the local .env file." });
     return;
   }
   try {
-    const response = await fetch("https://api.openai.com/v1/models", {
-      headers: { "Authorization": "Bearer " + config.openaiApiKey },
-      signal: AbortSignal.timeout(10000)
+    const ai = new GoogleGenAI({ apiKey: config.geminiApiKey });
+    await ai.models.generateContent({
+      model: config.geminiModel,
+      contents: "Reply with OK.",
+      config: { maxOutputTokens: 8, temperature: 0 }
     });
-    if (response.ok) {
-      res.json({ configured: true, valid: true, status: "valid", model: config.openaiModel, message: "API key authenticated successfully. Model access and billing still depend on your OpenAI project." });
+    res.json({ configured: true, valid: true, status: "valid", model: config.geminiModel, message: "Gemini API key authenticated and a small test request succeeded. Quotas and usage limits may still apply." });
+  } catch (error) {
+    const status = typeof error === "object" && error !== null && "status" in error
+      ? Number((error as { status?: unknown }).status)
+      : 0;
+    if (status === 401 || status === 403) {
+      res.json({ configured: true, valid: false, status: "invalid", message: "Google Gemini rejected the API key or its permissions. Check the key in Google AI Studio." });
       return;
     }
-    if (response.status === 401) {
-      res.json({ configured: true, valid: false, status: "invalid", message: "OpenAI rejected the API key. Check or replace it in your local .env file." });
+    if (status === 429) {
+      res.json({ configured: true, valid: null, status: "quota", message: "Gemini API key was supplied, but the request hit a quota or rate limit. Check AI Studio usage." });
       return;
     }
-    if (response.status === 403) {
-      res.json({ configured: true, valid: false, status: "restricted", message: "The API key was received but access is restricted. Check project permissions or organization settings." });
-      return;
-    }
-    res.status(502).json({ configured: true, valid: null, status: "unverified", message: "OpenAI returned HTTP " + response.status + ". Check API availability, limits, and project settings." });
-  } catch {
-    res.status(502).json({ configured: true, valid: null, status: "unreachable", message: "Could not reach OpenAI to verify the key. Check your internet connection and try again." });
+    res.status(502).json({ configured: true, valid: null, status: "unverified", message: "Could not verify Gemini right now. Check internet, model availability, and Google AI Studio quota." });
   }
 });
-
 app.get("/api/system", (_req, res) => {
   const total = os.totalmem();
   const free = os.freemem();
@@ -226,7 +225,7 @@ app.post("/api/command", async (req, res) => {
 
     // Unknown requests become conversational questions, not a canned "unsupported command" reply.
     const message = await answerGeneralQuestion(original);
-    await audit("conversation.answered", "success", { command: original, provider: config.openaiModel });
+    await audit("conversation.answered", "success", { command: original, provider: config.GeminiModel });
     res.json({ ok: true, message, type: "answer" });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "AURA could not complete the request.";
@@ -251,5 +250,5 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 });
 app.listen(config.port, config.host, () => {
   console.log("AURA Voice Agent listening on http://" + config.host + ":" + config.port);
-  console.log(config.openaiApiKey ? "AI question answering is configured." : "AI question answering is not configured; add OPENAI_API_KEY to local .env.");
+  console.log(config.GeminiApiKey ? "AI question answering is configured." : "AI question answering is not configured; add GEMINI_API_KEY to local .env.");
 });
