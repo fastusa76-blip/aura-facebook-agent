@@ -9,8 +9,8 @@ test("server exposes safe, allowlisted command handling and AI fallback", async 
   assert.match(source, /shell: false/);
   assert.match(source, /answerGeneralQuestion/);
   assert.match(source, /api\/ai\/status/);
-  assert.match(source, /api\.openai\.com\/v1\/models/);
-  assert.match(source, /api\.openai\.com\/v1\/chat\/completions/);
+  assert.match(source, /api\/ai\/status/);
+  assert.match(source, /GoogleGenAI/);\n  assert.match(source, /geminiApiKey/);\n  assert.match(source, /GEMINI_API_KEY/);
   assert.doesNotMatch(source, /exec\(parsed\.data\.text/);
 });
 
