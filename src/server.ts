@@ -131,8 +131,8 @@ async function answerGeneralQuestion(question: string): Promise<string> {
 app.get("/health", (_req, res) => res.json({
   status: "ok",
   service: "AURA Windows Voice Agent",
-  mode: config.GeminiApiKey ? "AI answers + allowlisted actions" : "allowlist actions; AI key not configured",
-  aiConfigured: Boolean(config.GeminiApiKey)
+  mode: config.geminiApiKey ? "AI answers + allowlisted actions" : "allowlist actions; AI key not configured",
+  aiConfigured: Boolean(config.geminiApiKey)
 }));
 app.get("/api/ai/status", async (_req, res) => {
   if (!config.geminiApiKey) {
@@ -225,7 +225,7 @@ app.post("/api/command", async (req, res) => {
 
     // Unknown requests become conversational questions, not a canned "unsupported command" reply.
     const message = await answerGeneralQuestion(original);
-    await audit("conversation.answered", "success", { command: original, provider: config.GeminiModel });
+    await audit("conversation.answered", "success", { command: original, provider: config.geminiModel });
     res.json({ ok: true, message, type: "answer" });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "AURA could not complete the request.";
@@ -250,5 +250,5 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 });
 app.listen(config.port, config.host, () => {
   console.log("AURA Voice Agent listening on http://" + config.host + ":" + config.port);
-  console.log(config.GeminiApiKey ? "AI question answering is configured." : "AI question answering is not configured; add GEMINI_API_KEY to local .env.");
+  console.log(config.geminiApiKey ? "Gemini AI question answering is configured." : "Gemini AI question answering is not configured; add GEMINI_API_KEY to local .env.");
 });
