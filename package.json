@@ -4,7 +4,9 @@
   "private": true,
   "description": "AURA local-first Windows voice assistant with allowlisted actions and audit logging",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
@@ -16,7 +18,8 @@
   "dependencies": {
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "@google/genai": "^1.30.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.3",
